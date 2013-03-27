@@ -52,6 +52,8 @@ typedef struct _VASurfaceAttributeTPI {
     VASurfaceMemoryType type;
     unsigned int width;
     unsigned int height;
+    unsigned int crop_width;
+    unsigned int crop_height;
     unsigned int size;
     unsigned int pixel_format; /* buffer format */
     unsigned int tiling; /* the memory is tiling or not */
