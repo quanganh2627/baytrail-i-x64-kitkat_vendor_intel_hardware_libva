@@ -220,6 +220,14 @@ typedef int VAStatus;	/* Return status type from functions */
  */
 const char *vaErrorStr(VAStatus error_status);
 
+typedef struct _VARectangle
+{
+    short x;
+    short y;
+    unsigned short width;
+    unsigned short height;
+} VARectangle;
+
 /*
  * Initialization:
  * A display must be obtained by calling vaGetDisplay() before calling
@@ -307,6 +315,15 @@ typedef enum
     VAEntrypointDeblocking	= 5,
     VAEntrypointEncSlice	= 6,	/* slice level encode */
     VAEntrypointEncPicture 	= 7,	/* pictuer encode, JPEG, etc */
+    /*
+     * For an implementation that supports a low power/high performance variant
+     * for slice level encode, it can choose to expose the 
+     * VAEntrypointEncSliceLP entrypoint. Certain encoding tools may not be 
+     * available with this entrypoint (e.g. interlace, MBAFF) and the 
+     * application can query the encoding configuration attributes to find 
+     * out more details if this entrypoint is supported.
+     */
+    VAEntrypointEncSliceLP 	= 8,
     VAEntrypointVideoProc       = 10,   /**< Video pre/post-processing. */
     VAEntrypointMax
 } VAEntrypoint;
@@ -450,6 +467,39 @@ typedef enum
      * that can be configured. e.g. a value of 2 means there are two distinct quality levels. 
      */
     VAConfigAttribEncQualityRange     = 21,
+    /**
+     * \brief Encoding quantization attribute. Read-only.
+     *
+     * This attribute conveys whether the driver supports certain types of quantization methods
+     * for encoding (e.g. trellis).
+     */
+    VAConfigAttribEncQuantization     = 22,
+    /**
+     * \brief Encoding intra refresh attribute. Read-only.
+     *
+     * This attribute conveys whether the driver supports certain types of intra refresh methods
+     * for encoding (e.g. adaptive intra refresh or rolling intra refresh). 
+     */
+    VAConfigAttribEncIntraRefresh     = 23,
+    /**
+     * \brief Encoding skip frame attribute. Read-only.
+     *
+     * This attribute conveys whether the driver supports sending skip frame parameters 
+     * (VAEncMiscParameterTypeSkipFrame) to the encoder's rate control, when the user has 
+     * externally skipped frames. 
+     */
+    VAConfigAttribEncSkipFrame        = 24,
+    /**
+     * \brief Encoding region-of-interest (ROI) attribute. Read-only.
+     *
+     * This attribute conveys whether the driver supports region-of-interest (ROI) encoding,
+     * based on user provided ROI rectangles.  The attribute value returned indicates the number
+     * of regions that are supported.  e.g. A value of 0 means ROI encoding is not supported.
+     * If ROI encoding is supported, the ROI information is passed to the driver using
+     * VAEncMiscParameterTypeRoi.
+     */
+    VAConfigAttribEncRoi              = 25,
+
     /**@}*/
     VAConfigAttribTypeMax
 } VAConfigAttribType;
@@ -491,6 +541,12 @@ typedef struct _VAConfigAttrib {
 #define VA_RC_CQP                       0x00000010
 /** \brief Variable bitrate with peak rate higher than average bitrate. */
 #define VA_RC_VBR_CONSTRAINED           0x00000020
+/** \brief Constant rate factor. */
+#define VA_RC_CRF			0x00000040
+/** \brief Macroblock based rate control.  Per MB control is decided 
+ *  internally in the encoder. It may be combined with other RC modes, except CQP. */
+#define VA_RC_MB                        0x00000080
+
 /**@}*/
 
 /** @name Attribute values for VAConfigAttribDecSliceMode */
@@ -559,6 +615,29 @@ typedef union _VAConfigAttribValEncJPEG {
     } bits;
     unsigned int value;
 } VAConfigAttribValEncJPEG;
+
+/** @name Attribute values for VAConfigAttribEncQuantization */
+/**@{*/
+/** \brief Driver does not support special types of quantization */
+#define VA_ENC_QUANTIZATION_NONE                        0x00000000
+/** \brief Driver supports trellis quantization */
+#define VA_ENC_QUANTIZATION_TRELLIS_SUPPORTED           0x00000001
+/**@}*/
+
+/** @name Attribute values for VAConfigAttribEncIntraRefresh */
+/**@{*/
+/** \brief Driver does not support intra refresh */
+#define VA_ENC_INTRA_REFRESH_NONE                       0x00000000
+/** \brief Driver supports column based rolling intra refresh */
+#define VA_ENC_INTRA_REFRESH_ROLLING_COLUMN             0x00000001
+/** \brief Driver supports row based rolling intra refresh */
+#define VA_ENC_INTRA_REFRESH_ROLLING_ROW                0x00000002
+/** \brief Driver supports adaptive intra refresh */
+#define VA_ENC_INTRA_REFRESH_ADAPTIVE                   0x00000010
+/** \brief Driver supports cyclic intra refresh */
+#define VA_ENC_INTRA_REFRESH_CYCLIC                     0x00000020
+
+/**@}*/
 
 /*
  * if an attribute is not applicable for a given
@@ -754,6 +833,9 @@ typedef enum {
     VASurfaceAttribMemoryType,
     /** \brief External buffer descriptor (pointer, write). */
     VASurfaceAttribExternalBufferDescriptor,
+    /** \brief Surface usage hint, gives the driver a hint of intended usage 
+     *  to optimize allocation (e.g. tiling) (int, read/write). */
+    VASurfaceAttribUsageHint,
     /** \brief Number of surface attributes. */
     VASurfaceAttribCount
 } VASurfaceAttribType;
@@ -824,6 +906,21 @@ typedef struct _VASurfaceAttribExternalBuffers {
 #define VA_SURFACE_EXTBUF_DESC_WC		0x00000008
 /** \brief Memory is protected */
 #define VA_SURFACE_EXTBUF_DESC_PROTECTED        0x80000000
+
+/** @name VASurfaceAttribUsageHint attribute usage hint flags */
+/**@{*/
+/** \brief Surface usage not indicated. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_GENERIC 	0x00000000
+/** \brief Surface used by video decoder. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_DECODER 	0x00000001
+/** \brief Surface used by video encoder. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_ENCODER 	0x00000002
+/** \brief Surface read by video post-processing. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_VPP_READ 	0x00000004
+/** \brief Surface written by video post-processing. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_VPP_WRITE 	0x00000008
+/** \brief Surface used for display. */
+#define VA_SURFACE_ATTRIB_USAGE_HINT_DISPLAY 	0x00000010
 
 /**@}*/
 
@@ -1008,12 +1105,23 @@ typedef enum
     VAEncMiscParameterTypeFrameRate 	= 0,
     VAEncMiscParameterTypeRateControl  	= 1,
     VAEncMiscParameterTypeMaxSliceSize	= 2,
+    /** \brief Buffer type used for Adaptive intra refresh */
     VAEncMiscParameterTypeAIR    	= 3,
     /** \brief Buffer type used to express a maximum frame size (in bits). */
     VAEncMiscParameterTypeMaxFrameSize  = 4,
     /** \brief Buffer type used for HRD parameters. */
     VAEncMiscParameterTypeHRD           = 5,
     VAEncMiscParameterTypeQualityLevel  = 6,
+    /** \brief Buffer type used for Rolling intra refresh */
+    VAEncMiscParameterTypeRIR           = 7,
+    VAEncMiscParameterTypeQuantization  = 8,
+    /** \brief Buffer type used for sending skip frame parameters to the encoder's
+      * rate control, when the user has externally skipped frames. */
+    VAEncMiscParameterTypeSkipFrame     = 9,
+    /** \brief Buffer type used for region-of-interest (ROI) parameters. */
+    VAEncMiscParameterTypeROI           = 10,
+    /** \brief Buffer type used for Cyclic intra refresh */
+    VAEncMiscParameterTypeCIR           = 11
 } VAEncMiscParameterType;
 
 /** \brief Packed header type. */
@@ -1085,11 +1193,11 @@ typedef struct _VAEncMiscParameterRateControl
      * then the rate control will guarantee the target bit-rate over a 500 ms window
      */
     unsigned int window_size;
-    /* initial QP at I frames */
-    unsigned int initial_qp;
-    /* min_qp/max_qp of encode frames
-     * If set them to 0, encode will choose the best QP according to rate control
+    /* initial_qp: initial QP for the first I frames
+     * min_qp/max_qp: minimal and maximum QP frames
+     * If set them to 0, encoder chooses the best QP according to rate control
      */
+    unsigned int initial_qp;
     unsigned int min_qp;
     unsigned int max_qp;
     unsigned int basic_unit_size;
@@ -1100,9 +1208,11 @@ typedef struct _VAEncMiscParameterRateControl
             unsigned int reset : 1;
             unsigned int disable_frame_skip : 1; /* Disable frame skip in rate control mode */
             unsigned int disable_bit_stuffing : 1; /* Disable bit stuffing in rate control mode */
+            unsigned int mb_rate_control : 4; /* Control VA_RC_MB 0: default, 1: enable, 2: disable, other: reserved*/
         } bits;
         unsigned int value;
     } rc_flags;
+    unsigned int CRF_quality_factor;
 } VAEncMiscParameterRateControl;
 
 typedef struct _VAEncMiscParameterFrameRate
@@ -1120,17 +1230,96 @@ typedef struct _VAEncMiscParameterMaxSliceSize
     unsigned int max_slice_size;
 } VAEncMiscParameterMaxSliceSize;
 
+/*
+ * \brief Cyclic intra refresh data structure for encoding.
+ */
+typedef struct _VAEncMiscParameterCIR
+{
+    /** \brief  the number of consecutive macroblocks to be coded as intra */
+    unsigned int cir_num_mbs;
+} VAEncMiscParameterCIR;
+
+/*
+ * \brief Adaptive intra refresh data structure for encoding.
+ */
 typedef struct _VAEncMiscParameterAIR
 {
+    /** \brief the minimum number of macroblocks to refresh in a frame */
     unsigned int air_num_mbs;
+    /**
+     * \brief threshhold of motion estimation block-matching criterion (typically SAD)
+     *
+     * Macroblocks above that threshold are marked as candidates and
+     * on subsequent frames a number of these candidates are coded as Intra.
+     * Generally the threshhold need to be set and tuned to an appropriate level
+     * according to the feedback of coded frame.
+     */
     unsigned int air_threshold;
-    unsigned int air_auto; /* if set to 1 then hardware auto-tune the AIR threshold */
+    /** \brief if set to 1 then hardware auto-tune the AIR threshold */
+    unsigned int air_auto;
 } VAEncMiscParameterAIR;
+
+/*
+ * \brief Rolling intra refresh data structure for encoding.
+ */
+typedef struct _VAEncMiscParameterRIR
+{
+    union
+    {
+        struct
+	/**
+	 * \brief Indicate if intra refresh is enabled in column/row. 
+	 *
+	 * App should query VAConfigAttribEncIntraRefresh to confirm RIR support 
+	 * by the driver before sending this structure. The following RIR restrictions
+	 * apply:
+	 *  - No field encoding.
+	 *  - No B frames.
+	 *  - No multiple references.
+	 */
+        {
+	    /* \brief enable RIR in column */
+            unsigned int enable_rir_column : 1;
+	    /* \brief enable RIR in row */
+            unsigned int enable_rir_row : 1;
+	    unsigned int reserved : 30;
+        } bits;
+        unsigned int value;
+    } rir_flags;
+    /** 
+     * \brief Indicates the column or row location in MB. It is ignored if 
+     * rir_flags is 0. 
+     */
+    unsigned short intra_insertion_location;
+    /** 
+     * \brief Indicates the number of columns or rows in MB. It is ignored if 
+     * rir_flags is 0.
+     */
+    unsigned short intra_insert_size;
+    /** 
+     * \brief indicates the Qp difference for inserted intra columns or rows. 
+     * App can use this to adjust intra Qp based on bitrate & max frame size.
+     */
+    char qp_delta_for_inserted_intra;
+	
+} VAEncMiscParameterRIR;
 
 typedef struct _VAEncMiscParameterHRD
 {
+   /**
+    * \brief This value indicates the amount of data that will
+    * be buffered by the decoding application prior to beginning playback
+    */
     unsigned int initial_buffer_fullness;       /* in bits */
-    unsigned int optimal_buffer_fullness;       /* in bits */    
+   /**
+    * \brief This value indicates the amount of data that the
+    * encoder should try to maintain in the decoder's buffer
+    */
+    unsigned int optimal_buffer_fullness;       /* in bits */
+    /**
+     * \brief This value indicates the amount of data that
+     * may be buffered by the decoding application
+     */
     unsigned int buffer_size;                   /* in bits */
 } VAEncMiscParameterHRD;
 
@@ -1166,6 +1355,91 @@ typedef struct _VAEncMiscParameterBufferQualityLevel {
     unsigned int                quality_level;
 } VAEncMiscParameterBufferQualityLevel;
 
+/**
+ * \brief Quantization settings for encoding.
+ *
+ * Some encoders support special types of quantization such as trellis, and this structure
+ * can be used by the app to control these special types of quantization by the encoder.
+ */
+typedef struct _VAEncMiscParameterQuantization
+{
+    union
+    {
+    /* if no flags is set then quantization is determined by the driver */
+        struct
+        {
+	    /* \brief disable trellis for all frames/fields */
+            unsigned int disable_trellis : 1; 
+	    /* \brief enable trellis for I frames/fields */
+            unsigned int enable_trellis_I : 1; 
+	    /* \brief enable trellis for P frames/fields */
+            unsigned int enable_trellis_P : 1; 
+	    /* \brief enable trellis for B frames/fields */
+            unsigned int enable_trellis_B : 1; 
+            unsigned int reserved : 28;
+        } bits;
+        unsigned int value;
+    } quantization_flags;
+} VAEncMiscParameterQuantization;
+
+/**
+ * \brief Encoding skip frame.
+ *
+ * The application may choose to skip frames externally to the encoder (e.g. drop completely or 
+ * code as all skip's). For rate control purposes the encoder will need to know the size and number 
+ * of skipped frames.  Skip frame(s) indicated through this structure is applicable only to the 
+ * current frame.  It is allowed for the application to still send in packed headers for the driver to 
+ * pack, although no frame will be encoded (e.g. for HW to encrypt the frame).  
+ */
+typedef struct _VAEncMiscParameterSkipFrame {
+    /** \brief Indicates skip frames as below.
+      * 0: Encode as normal, no skip.
+      * 1: One or more frames were skipped prior to the current frame, encode the current frame as normal.  
+      * 2: The current frame is to be skipped, do not encode it but pack/encrypt the packed header contents
+      *    (all except VAEncPackedHeaderSlice) which could contain actual frame contents (e.g. pack the frame 
+      *    in VAEncPackedHeaderPicture).  */
+    unsigned char               skip_frame_flag;
+    /** \brief The number of frames skipped prior to the current frame.  Valid when skip_frame_flag = 1. */
+    unsigned char               num_skip_frames;
+    /** \brief When skip_frame_flag = 1, the size of the skipped frames in bits.   When skip_frame_flag = 2, 
+      * the size of the current skipped frame that is to be packed/encrypted in bits. */
+    unsigned int                size_skip_frames;
+} VAEncMiscParameterSkipFrame;
+
+/**
+ * \brief Encoding region-of-interest (ROI).
+ *
+ * The encoding ROI can be set through this structure, if the implementation
+ * supports ROI input. The ROI set through this structure is applicable only to the
+ * current frame.  The number of supported ROIs can be queried through the
+ * VAConfigAttribEncRoi.  The encoder will use the ROI information to adjust the QP
+ * values of the MB's that fall within the ROIs.
+ */
+typedef struct _VAEncMiscParameterBufferRoi {
+    /** \brief Number of ROIs being sent.*/
+    unsigned int                num_roi;
+    /** \brief Valid when VAConfigAttribRateControl != VA_RC_CQP, then the encoder's
+     *  rate control will determine actual delta QPs.  Specifies the max/min allowed delta QPs.*/
+    char                        max_delta_qp;
+    char                        min_delta_qp;
+
+    /** \brief Pointer to a VAEncROI array with num_ROI elements.*/
+    struct VAEncROI
+    {
+        /** \brief Defines the ROI boundary in pixels, the driver will map it to appropriate
+         *  codec coding units.  It is relative to the frame coordinates for both frame and field cases. */
+        VARectangle             roi_rectangle;
+        /** \brief When VAConfigAttribRateControl == VA_RC_CQP then roi_value specifes the delta QP that
+         *  will be added on top of the frame level QP.  For other rate control modes, roi_value specifies the
+         *  priority of the ROI region relative to the non-ROI region.  It can positive (more important) or
+         *  negative (less important) values and is compared with non-ROI region (taken as value 0).
+         *  E.g. ROI region with roi_value -3 is less important than the non-ROI region (roi_value implied to be 0)
+         *  which is less important than ROI region with roi_value +2.  For overlapping regions, the roi_value
+         *  that is first in the ROI array will have priority.   */
+        char                    roi_value;
+    } *ROI;
+} VAEncMiscParameterBufferROI;
+
 /* 
  * There will be cases where the bitstream buffer will not have enough room to hold
  * the data for the entire slice, and the following flags will be used in the slice
@@ -1186,6 +1460,8 @@ typedef struct _VASliceParameterBufferBase
     unsigned int slice_data_offset;	/* the offset to the first byte of slice data */
     unsigned int slice_data_flag;	/* see VA_SLICE_DATA_FLAG_XXX definitions */
 } VASliceParameterBufferBase;
+
+#include <va/va_dec_jpeg.h>
 
 /****************************
  * MPEG-2 data structures
@@ -2215,6 +2491,8 @@ VAStatus vaQuerySurfaceError(
 #define VA_FOURCC_BGRX		0x58524742
 #define VA_FOURCC_ARGB		0x42475241
 #define VA_FOURCC_XRGB		0x42475258
+#define VA_FOURCC_ABGR          0x52474241
+#define VA_FOURCC_XBGR          0x52474258
 #define VA_FOURCC_UYVY          0x59565955
 #define VA_FOURCC_YUY2          0x32595559
 #define VA_FOURCC_AYUV          0x56555941
@@ -2268,7 +2546,7 @@ typedef struct _VAImage
     unsigned short	width; 
     unsigned short	height;
     unsigned int	data_size;
-    unsigned int	num_planes;	/* can not be greater than 3 */
+    unsigned int	num_planes;	/* can not be greater than 4 */
     /* 
      * An array indicating the scanline pitch in bytes for each plane.
      * Each plane may have a different pitch. Maximum 3 planes for planar formats
@@ -2294,6 +2572,7 @@ typedef struct _VAImage
     char component_order[4];
     /*
      * Pitch and byte offset for the fourth plane if the image format requires 4 planes
+     * Particular use case is JPEG with CMYK profile
      */
     unsigned int extra_pitch;
     unsigned int extra_offset;
@@ -2549,14 +2828,6 @@ VAStatus vaDeassociateSubpicture (
     VASurfaceID *target_surfaces,
     int num_surfaces
 );
-
-typedef struct _VARectangle
-{
-    short x;
-    short y;
-    unsigned short width;
-    unsigned short height;
-} VARectangle;
 
 /*
  * Display attributes
