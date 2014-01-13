@@ -325,6 +325,49 @@ typedef enum
      */
     VAEntrypointEncSliceLP 	= 8,
     VAEntrypointVideoProc       = 10,   /**< Video pre/post-processing. */
+
+    /**
+     * \brief Intel specific entrypoints start at 1001
+     */
+    /**
+     * \brief VAEntrypointEncFEIIntel
+     *
+     * The purpose of FEI (Flexible Encoding Infrastructure) is to allow applications to 
+     * have more controls and trade off quality for speed with their own IPs. A pre-processing 
+     * function for getting some statistics and motion vectors is added 
+     * and some extra controls for Encode pipeline are provided. 
+     * The application can optionally call the statistics function
+     * to get motion vectors and statistics before calling encode function. 
+     * The application can also optionally provide input to VME for extra 
+     * encode control and get the output from VME. Application can chose to 
+     * modify the VME output/PAK input during encoding, but the performance 
+     * impact is significant.
+     *
+     * On top of the existing buffers for normal encode, there will be 
+     * one extra input buffer (VAEncMiscParameterIntelFEIFrameControl) and 
+     * three extra output buffers (VAIntelEncFEIMVBufferType, VAIntelEncFEIModeBufferType 
+     * and VAIntelEncFEIDistortionBufferType) for VAEntrypointIntelEncFEI entry function. 
+     * If separate PAK is set, two extra input buffers 
+     * (VAIntelEncFEIMVBufferType, VAIntelEncFEIModeBufferType) are needed for PAK input. 
+     *
+     **/
+    VAEntrypointEncFEIIntel     = 1001,
+    /**
+     * \brief VAEntrypointStatisticsIntel
+     *
+     * Statistics, like variances, distortions, motion vectors can be obtained 
+     * via this entry point. Checking whether Statistics is supported can be 
+     * performed with vaQueryConfigEntrypoints() and the profile argument 
+     * set to #VAProfileNone. If Statistics entry point is supported, 
+     * then the list of returned entry-points will include #VAEntrypointIntelStatistics. 
+     * Supported pixel format, maximum resolution and statistics specific attributes 
+     * can be obtained via normal attribute query. 
+     * One input buffer (VAIntelStatsStatisticsParameterBufferType) and one or two 
+     * output buffers (VAIntelStatsStatisticsBufferType and VAIntelStatsMotionVectorBufferType) 
+     * are needed for this entry point.
+     *
+     **/
+    VAEntrypointStatisticsIntel,
     VAEntrypointMax
 } VAEntrypoint;
 
@@ -486,7 +529,7 @@ typedef enum
      *
      * This attribute conveys whether the driver supports sending skip frame parameters 
      * (VAEncMiscParameterTypeSkipFrame) to the encoder's rate control, when the user has 
-     * externally skipped frames. 
+     * externally skipped frames.  It is a boolean value 0 - unsupported, 1 - supported.
      */
     VAConfigAttribEncSkipFrame        = 24,
     /**
@@ -499,7 +542,40 @@ typedef enum
      * VAEncMiscParameterTypeRoi.
      */
     VAConfigAttribEncRoi              = 25,
-
+    /**
+     * \brief Encoding extended rate control attribute. Read-only.
+     *
+     * This attribute conveys whether the driver supports any extended rate control features
+     * The attribute value is partitioned into fields as defined in the 
+     * VAConfigAttribRateControlExt union.
+     */
+    VAConfigAttribEncRateControlExt   = 26,
+    /**
+     * \brief Intel specific attributes start at 1001 
+     */
+    /**
+     * \brief Encode function type.
+     *
+     * This attribute conveys whether the driver supports different function types for encode. 
+     * It can be ENC, PAK, or ENC + PAK. Currently it is for FEI entry point only. 
+     * Default is ENC + PAK.
+     */
+    VAConfigAttribEncFunctionTypeIntel = 1001,
+    /**
+     * \brief Maximum number of MV predictors. Read-only.
+     *
+     * This attribute determines the maximum number of MV predictors the driver 
+     * can support to encode a single frame. 0 means no MV predictor is supported.
+     */
+    VAConfigAttribEncMVPredictorsIntel,
+    /**
+     * \brief Statistics attribute. Read-only.
+     *
+     * This attribute exposes a number of capabilities of the VAEntrypointStatistics entry 
+     * point. The attribute value is partitioned into fields as defined in the 
+     * VAConfigAttribValStatistics union.
+     */
+    VAConfigAttribStatisticsIntel,
     /**@}*/
     VAConfigAttribTypeMax
 } VAConfigAttribType;
@@ -541,8 +617,9 @@ typedef struct _VAConfigAttrib {
 #define VA_RC_CQP                       0x00000010
 /** \brief Variable bitrate with peak rate higher than average bitrate. */
 #define VA_RC_VBR_CONSTRAINED           0x00000020
-/** \brief Constant rate factor. */
-#define VA_RC_CRF			0x00000040
+/** \brief Intelligent Constant Quality. Provided an initial ICQ_quality_factor, 
+ *  adjusts QP at a frame and MB level based on motion to improve subjective quality. */
+#define VA_RC_ICQ			0x00000040
 /** \brief Macroblock based rate control.  Per MB control is decided 
  *  internally in the encoder. It may be combined with other RC modes, except CQP. */
 #define VA_RC_MB                        0x00000080
@@ -638,6 +715,65 @@ typedef union _VAConfigAttribValEncJPEG {
 #define VA_ENC_INTRA_REFRESH_CYCLIC                     0x00000020
 
 /**@}*/
+
+/** \brief Attribute value for VAConfigAttribEncRateControlExt */
+typedef union _VAConfigAttribValEncRateControlExt {
+    struct {
+        /** \brief The number of temporal layers with layer specific bit-rate targets
+         * that are supported. The application will send multiple
+         * VAEncMiscParameterRateControl and VAEncMiscParameterFrameRate structures
+         * for each layer, using the temporal_id field as the layer identifier.
+         * If per temporal layer rate control is not supported, 
+         * num_temporal_layers_minus1 will be 0 and the temporal_id field in
+         * VAEncMiscParameterRateControl and VAEncMiscParameterFrameRate will be ignored.
+         */
+     unsigned int num_temporal_layers_minus1 : 8;
+     unsigned int reserved                   : 24;
+     } bits;
+     unsigned int value;
+} VAConfigAttribValEncRateControlExt;
+
+/**
+ * \brief Intel specific attribute definitions
+ */
+/** @name Attribute values for VAConfigAttribEncFunctionTypeIntel
+ *
+ * The desired type should be passed to driver when creating the configuration. 
+ * If VA_ENC_FUNCTION_ENC_PAK is set, VA_ENC_FUNCTION_ENC and VA_ENC_FUNCTION_PAK 
+ * will be ignored if set also.  VA_ENC_FUNCTION_ENC and VA_ENC_FUNCTION_PAK operations 
+ * shall be called separately if ENC and PAK (VA_ENC_FUNCTION_ENC | VA_ENC_FUNCTION_PAK) 
+ * is set for configuration. VA_ENC_FUNCTION_ENC_PAK is recommended for best performance.
+ * If only VA_ENC_FUNCTION_ENC is set, there will be no bitstream output. 
+ * If VA_ENC_FUNCTION_ENC_PAK is not set and VA_ENC_FUNCTION_PAK is set, then two extra 
+ * input buffers for PAK are needed: VAEncFEIMVBufferType and VAEncFEIModeBufferType.
+ **/
+/**@{*/
+/** \brief Only default is supported */
+#define VA_ENC_FUNCTION_DEFAULT_INTEL                         0x00000000
+/** \brief ENC only is supported */
+#define VA_ENC_FUNCTION_ENC_INTEL                             0x00000001
+/** \brief PAK only is supported */
+#define VA_ENC_FUNCTION_PAK_INTEL                             0x00000002
+/** \brief ENC_PAK is supported */
+#define VA_ENC_FUNCTION_ENC_PAK_INTEL                         0x00000004
+
+/**@}*/
+
+/** \brief Attribute value for VAConfigAttribStatisticsIntel */
+typedef union _VAConfigAttribValStatisticsIntel {
+    struct {
+        /** \brief Max number of past reference frames that are supported. */
+        unsigned int	max_num_past_references   : 4;
+        /** \brief Max number of future reference frames that are supported. */
+        unsigned int	max_num_future_references : 4;
+        /** \brief Number of output surfaces that are supported */
+        unsigned int	num_outputs               : 3;
+        /** \brief Interlaced content is supported */
+        unsigned int    interlaced                : 1;
+        unsigned int	reserved                  : 20;
+    } bits;
+    unsigned int value;
+} VAConfigAttribValStatisticsIntel;
 
 /*
  * if an attribute is not applicable for a given
@@ -1074,6 +1210,7 @@ typedef enum
     VAEncMiscParameterBufferType	= 27,
     VAEncMacroblockParameterBufferType	= 28,
     VAEncMacroblockMapBufferType        = 29,
+    VAEncQpBufferType                   = 30,
 /* Following are video processing buffer types */
     /**
      * \brief Video processing pipeline parameter buffer.
@@ -1097,6 +1234,17 @@ typedef enum
     VAProcFilterParameterBufferType     = 42,
     VAParsePictureParameterBufferType   = 43,
     VAParseSliceHeaderGroupBufferType   = 44,
+    
+    /**
+     * \brief Intel specific buffer types start at 1001
+     */
+    VAEncFEIMVBufferTypeIntel                 = 1001,
+    VAEncFEIModeBufferTypeIntel,
+    VAEncFEIDistortionBufferTypeIntel,
+    VAStatsStatisticsParameterBufferTypeIntel,
+    VAStatsStatisticsBufferTypeIntel,
+    VAStatsMotionVectorBufferTypeIntel,
+
     VABufferTypeMax
 } VABufferType;
 
@@ -1121,7 +1269,11 @@ typedef enum
     /** \brief Buffer type used for region-of-interest (ROI) parameters. */
     VAEncMiscParameterTypeROI           = 10,
     /** \brief Buffer type used for Cyclic intra refresh */
-    VAEncMiscParameterTypeCIR           = 11
+    VAEncMiscParameterTypeCIR           = 11,
+
+    /* Intel specific types start at 1001 */
+    /* VAEntrypointEncFEIIntel */
+    VAEncMiscParameterTypeFEIFrameControlIntel = 1001 
 } VAEncMiscParameterType;
 
 /** \brief Packed header type. */
@@ -1209,15 +1361,32 @@ typedef struct _VAEncMiscParameterRateControl
             unsigned int disable_frame_skip : 1; /* Disable frame skip in rate control mode */
             unsigned int disable_bit_stuffing : 1; /* Disable bit stuffing in rate control mode */
             unsigned int mb_rate_control : 4; /* Control VA_RC_MB 0: default, 1: enable, 2: disable, other: reserved*/
+            /*
+             * The temporal layer that the rate control parameters are specified for.
+             */ 
+            unsigned int temporal_id : 8; 
+            unsigned int reserved : 17;
         } bits;
         unsigned int value;
     } rc_flags;
-    unsigned int CRF_quality_factor;
+    unsigned int ICQ_quality_factor; /* Initial ICQ quality factor: 1-51. */
 } VAEncMiscParameterRateControl;
 
 typedef struct _VAEncMiscParameterFrameRate
 {
     unsigned int framerate;
+    union 
+    {
+        struct
+        {
+            /*
+             * The temporal id the framerate parameters are specified for.
+             */
+            unsigned int temporal_id : 8; 
+            unsigned int reserved : 24;
+         } bits;
+         unsigned int value;
+     } framerate_flags;
 } VAEncMiscParameterFrameRate;
 
 /*
@@ -1247,10 +1416,10 @@ typedef struct _VAEncMiscParameterAIR
     /** \brief the minimum number of macroblocks to refresh in a frame */
     unsigned int air_num_mbs;
     /**
-     * \brief threshhold of motion estimation block-matching criterion (typically SAD)
+     * \brief threshhold of blockmatching criterion (typically SAD)
      *
      * Macroblocks above that threshold are marked as candidates and
-     * on subsequent frames a number of these candidates are coded as Intra.
+     * on subsequent frames a number of these candidates are coded as Intra
      * Generally the threshhold need to be set and tuned to an appropriate level
      * according to the feedback of coded frame.
      */
@@ -2225,6 +2394,7 @@ typedef  struct _VACodedBufferSegment  {
      */
     void               *next;
 } VACodedBufferSegment;
+
 
 /*
  * H.264 Parsed Slice Header Group Info
