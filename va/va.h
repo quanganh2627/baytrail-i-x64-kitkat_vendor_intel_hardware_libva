@@ -1234,7 +1234,7 @@ typedef enum
     VAProcFilterParameterBufferType     = 42,
     VAParsePictureParameterBufferType   = 43,
     VAParseSliceHeaderGroupBufferType   = 44,
-    
+
     /**
      * \brief Intel specific buffer types start at 1001
      */
@@ -2618,10 +2618,11 @@ typedef enum
 */
 typedef struct _VASurfaceDecodeMBErrors
 {
-    int status; /* 1 if hardware has returned detailed info below, -1 means this record is invalid */
+    int status; /* 1 if start_mb/end_mb with errors is returned, 2 if num_mb with errors is returned, -1 means this record is invalid */
     unsigned int start_mb; /* start mb address with errors */
-    unsigned int end_mb;  /* end mb address with errors */
+    unsigned int end_mb;   /* end mb address with errors */
     VADecodeErrorType decode_error_type;
+    unsigned int num_mb;   /* number of mbs with errors */
 } VASurfaceDecodeMBErrors;
 
 /*
@@ -2654,6 +2655,7 @@ VAStatus vaQuerySurfaceError(
  * Pre-defined fourcc codes
  */
 #define VA_FOURCC_NV12		0x3231564E
+#define VA_FOURCC_NV21		0x3132564E
 #define VA_FOURCC_AI44		0x34344149
 #define VA_FOURCC_RGBA		0x41424752
 #define VA_FOURCC_RGBX		0x58424752
