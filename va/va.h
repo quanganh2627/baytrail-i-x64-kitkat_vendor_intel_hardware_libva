@@ -649,6 +649,9 @@ typedef union _VAConfigAttribValDecJPEG {
     /** \brief Reserved for future use. */
     unsigned int reserved[3]; 
 } VAConfigAttribValDecJPEG;
+/** \brief Driver supports subsample mode for slice decoding */
+#define VA_DEC_SLICE_MODE_SUBSAMPLE    0x00000004
+
 /**@}*/
 
 /** @name Attribute values for VAConfigAttribEncPackedHeaders */
@@ -2506,6 +2509,14 @@ typedef struct _VAParsePictureParameterBuffer {
         } bits;
         unsigned int value;
     } flags;
+
+    union {
+        struct {
+            unsigned char nalu_header_unit_type : 5;
+            unsigned char nalu_header_ref_idc : 2;
+        } bits;
+        unsigned char value;
+    } nalu_header;
 
     unsigned short expected_pic_parameter_set_id;
     unsigned char num_slice_groups_minus1;
