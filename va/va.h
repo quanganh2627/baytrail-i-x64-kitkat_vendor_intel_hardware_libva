@@ -395,6 +395,14 @@ typedef enum
      * See \c VA_DEC_SLICE_MODE_xxx for the list of slice decoding modes.
      */
     VAConfigAttribDecSliceMode		= 6,
+   /**
+     * \brief JPEG decoding attribute. Read-only.
+     *
+     * This attribute exposes a number of capabilities of the underlying
+     * JPEG implementation. The attribute value is partitioned into fields as defined in the 
+     * VAConfigAttribValDecJPEG union.
+     */
+    VAConfigAttribDecJPEG             = 7,
 
     /** @name Attributes for encoding */
     /**@{*/
@@ -547,7 +555,7 @@ typedef enum
      *
      * This attribute conveys whether the driver supports any extended rate control features
      * The attribute value is partitioned into fields as defined in the 
-     * VAConfigAttribRateControlExt union.
+     * VAConfigAttribValEncRateControlExt union.
      */
     VAConfigAttribEncRateControlExt   = 26,
     /**
@@ -632,6 +640,15 @@ typedef struct _VAConfigAttrib {
 #define VA_DEC_SLICE_MODE_NORMAL       0x00000001
 /** \brief Driver supports base mode for slice decoding */
 #define VA_DEC_SLICE_MODE_BASE         0x00000002
+
+/** @name Attribute values for VAConfigAttribDecJPEG */
+/**@{*/
+typedef union _VAConfigAttribValDecJPEG {
+    /** \brief Set to (1 << VA_ROTATION_xxx) for supported rotation angles. */
+    unsigned int rotation;
+    /** \brief Reserved for future use. */
+    unsigned int reserved[3]; 
+} VAConfigAttribValDecJPEG;
 /**@}*/
 
 /** @name Attribute values for VAConfigAttribEncPackedHeaders */
@@ -672,6 +689,13 @@ typedef struct _VAConfigAttrib {
 #define VA_ENC_SLICE_STRUCTURE_POWER_OF_TWO_ROWS        0x00000001
 /** \brief Driver supports an arbitrary number of rows per slice. */
 #define VA_ENC_SLICE_STRUCTURE_ARBITRARY_MACROBLOCKS    0x00000002
+/** \brief Driver supports any number of rows per slice but they must be the same 
+	for all slices except for the last one, which must be equal or smaller 
+	to the previous slices. */
+#define VA_ENC_SLICE_STRUCTURE_EQUAL_ROWS    		0x00000004
+/** \brief Driver supports a maximum slice size requested by the app.  
+	The size is sent in VAEncMiscParameterMaxSliceSize. */
+#define VA_ENC_SLICE_STRUCTURE_MAX_SLICE_SIZE           0x00000008
 /**@}*/
 
 /** \brief Attribute value for VAConfigAttribEncJPEG */
@@ -3013,8 +3037,8 @@ VAStatus vaDeassociateSubpicture (
  * @name Rotation angles
  *
  * Those values could be used for VADisplayAttribRotation attribute or
- * VAProcPipelineParameterBuffer::rotation_state. The rotation operation
- * is clockwise.
+ * VAProcPipelineParameterBuffer::rotation_state or in VAConfigAttribValDecJPEG. 
+ * The rotation operation is clockwise.
  */
 /**@{*/
 /** \brief No rotation. */
