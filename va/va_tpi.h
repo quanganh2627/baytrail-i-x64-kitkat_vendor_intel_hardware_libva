@@ -62,7 +62,7 @@ typedef struct _VASurfaceAttributeTPI {
     unsigned int chroma_u_offset; /* U offset from the beginning of the memory */
     unsigned int chroma_v_offset; /* V offset from the beginning of the memory */
     unsigned int count; /* buffer count for surface creation */
-    unsigned int *buffers; /* buffer handles or user pointers */
+    unsigned long *buffers; /* buffer handles or user pointers */
     unsigned int reserved[4]; /* used to pass additional information, like
                                * Android native window pointer
                                */
