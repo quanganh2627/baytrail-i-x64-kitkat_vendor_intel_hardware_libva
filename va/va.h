@@ -2527,6 +2527,8 @@ typedef struct _VAParsePictureParameterBuffer {
     unsigned char log2_max_pic_order_cnt_lsb_minus4;
     unsigned char pic_order_cnt_type;
     unsigned char log2_max_frame_num_minus4;
+    unsigned char idr_flag;
+    unsigned char slice_offset;
 
     /* additionally */
     unsigned char residual_colour_transform_flag;
