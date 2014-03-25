@@ -78,6 +78,7 @@
 #ifndef _VA_H_
 #define _VA_H_
 
+#include <stdint.h>
 #include <va/va_version.h>
 
 #ifdef __cplusplus
@@ -204,9 +205,11 @@ typedef int VAStatus;	/* Return status type from functions */
 #define VA_CLEAR_DRAWABLE       0x00000008
 
 /* Color space conversion flags for vaPutSurface() */
+#define VA_SRC_COLOR_MASK       0x000000f0
 #define VA_SRC_BT601            0x00000010
 #define VA_SRC_BT709            0x00000020
 #define VA_SRC_SMPTE_240        0x00000040
+#define VA_SRC_BT2020           0x00000080
 
 /* Scaling flags for vaPutSurface() */
 #define VA_FILTER_SCALING_DEFAULT       0x00000000
@@ -215,6 +218,23 @@ typedef int VAStatus;	/* Return status type from functions */
 #define VA_FILTER_SCALING_NL_ANAMORPHIC 0x00000300
 #define VA_FILTER_SCALING_MASK          0x00000f00
 
+/*
+ * The upper 16 bits are reserved for VPP filter fast path usage.
+ * Flag to enable auto noise reduction.
+ */
+#define VA_FILTER_NOISEREDUCTION_AUTO   0x00010000
+
+/*
+ * This is to indicate that the color-space conversion uses full range or reduced range.
+ * VA_SOURCE_RANGE_FULL(Full range): Y/Cb/Cr is in [0, 255]. It is mainly used
+ *      for JPEG/JFIF formats. The combination with the BT601 flag means that
+ *      JPEG/JFIF color-space conversion matrix is used.
+ * VA_SOURCE_RANGE_REDUCED(Reduced range): Y is in [16, 235] and Cb/Cr is in [16, 240].
+ *      It is mainly used for the YUV->RGB color-space conversion in SDTV/HDTV/UHDTV.
+ */
+#define VA_SOURCE_RANGE_MASK            0x00020000
+#define VA_SOURCE_RANGE_FULL            0x00020000
+#define VA_SOURCE_RANGE_REDUCED         0x00000000
 /*
  * Returns a short english description of error_status
  */
@@ -227,6 +247,16 @@ typedef struct _VARectangle
     unsigned short width;
     unsigned short height;
 } VARectangle;
+
+/** \brief Generic motion vector data structure. */
+typedef struct _VAMotionVector {
+    /** \mv0[0]: horizontal motion vector for past reference */
+    /** \mv0[1]: vertical motion vector for past reference */
+    /** \mv1[0]: horizontal motion vector for future reference */
+    /** \mv1[1]: vertical motion vector for future reference */
+    unsigned short  mv0[2];  /* past reference */
+    unsigned short  mv1[2];  /* future reference */
+} VAMotionVector;
 
 /*
  * Initialization:
@@ -297,10 +327,9 @@ typedef enum
     VAProfileH263Baseline		= 11,
     VAProfileJPEGBaseline               = 12,
     VAProfileH264ConstrainedBaseline    = 13,
-    VAProfileH264MultiviewHigh          = 14,
-    VAProfileH264StereoHigh             = 15,
-    VAProfileVP8Version0_3              = 16,
-    VAProfileMax
+    VAProfileVP8Version0_3              = 14,
+    VAProfileH264MultiviewHigh          = 15,
+    VAProfileH264StereoHigh             = 16
 } VAProfile;
 
 /* 
@@ -368,7 +397,6 @@ typedef enum
      *
      **/
     VAEntrypointStatisticsIntel,
-    VAEntrypointMax
 } VAEntrypoint;
 
 /* Currently defined configuration attribute types */

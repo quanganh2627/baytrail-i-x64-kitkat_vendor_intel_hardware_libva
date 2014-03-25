@@ -714,35 +714,6 @@ typedef enum {
         VAEncBitstreamAttribMiscMask | 1),
 } VAEncBitstreamAttribTypeH264;
 
-typedef struct _VAEncPictureParameterBufferH264MVC {
-    /**
-     * \brief Regular H.264 picture parameters
-     *
-     */
-    VAEncPictureParameterBufferH264 base_picture_param;
-    /**
-     * \brief view id associated with this picture
-     *
-     */
-    unsigned int view_id;
-    /**
-     * \brief same as H.264 MVC syntax element
-     *
-     */
-    unsigned char anchor_picture_flag;
-    /**
-     * \brief same as H.264 MVC syntax element
-     *
-     */
-    unsigned char inter_view_flag;
-
-    /**
-     * \brief Specifies view_id of each element in ReferenceFrames[16]
-     *
-     */
-    unsigned int view_id_dpb[16];
-
-} VAEncPictureParameterBufferH264MVC;
 
 /**
  * \brief Allocates a new H.264 bitstream writer.
