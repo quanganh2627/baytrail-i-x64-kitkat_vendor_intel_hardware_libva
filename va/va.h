@@ -632,6 +632,8 @@ typedef struct _VAConfigAttrib {
 #define VA_DEC_SLICE_MODE_NORMAL       0x00000001
 /** \brief Driver supports base mode for slice decoding */
 #define VA_DEC_SLICE_MODE_BASE         0x00000002
+/** \brief Driver supports subsample mode for slice decoding */
+#define VA_DEC_SLICE_MODE_SUBSAMPLE    0x00000004
 /**@}*/
 
 /** @name Attribute values for VAConfigAttribEncPackedHeaders */
@@ -2483,6 +2485,15 @@ typedef struct _VAParsePictureParameterBuffer {
         unsigned int value;
     } flags;
 
+
+    union {
+        struct {
+            unsigned char nalu_header_unit_type : 5;
+            unsigned char nalu_header_ref_idc : 2;
+        } bits;
+        unsigned char value;
+    } nalu_header;
+
     unsigned short expected_pic_parameter_set_id;
     unsigned char num_slice_groups_minus1;
     unsigned char slice_group_map_type;
@@ -2492,6 +2503,8 @@ typedef struct _VAParsePictureParameterBuffer {
     unsigned char log2_max_pic_order_cnt_lsb_minus4;
     unsigned char pic_order_cnt_type;
     unsigned char log2_max_frame_num_minus4;
+    unsigned char idr_flag;
+    unsigned char slice_offset;
 
     /* additionally */
     unsigned char residual_colour_transform_flag;
