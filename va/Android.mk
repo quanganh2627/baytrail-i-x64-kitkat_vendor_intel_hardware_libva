@@ -42,7 +42,7 @@ LOCAL_SRC_FILES := \
 	va_trace.c \
 	va_fool.c
 
-LOCAL_CFLAGS += \
+LOCAL_CFLAGS := \
 	-DANDROID \
 	-DVA_DRIVERS_PATH="\"$(LIBVA_DRIVERS_PATH)\"" \
 	-DLOG_TAG=\"libva\"
@@ -54,9 +54,9 @@ else
 LOCAL_CFLAGS += -DANDROID_LOG
 endif
 
-LOCAL_EXPORT_C_INCLUDE_DIRS += $(LOCAL_PATH)/..
+LOCAL_EXPORT_C_INCLUDE_DIRS := $(LOCAL_PATH)/..
 
-LOCAL_C_INCLUDES += \
+LOCAL_C_INCLUDES := \
 	$(TARGET_OUT_HEADERS)/libva \
 	$(LOCAL_PATH)/x11 \
 	$(LOCAL_PATH)/..
@@ -64,6 +64,7 @@ LOCAL_C_INCLUDES += \
 LOCAL_COPY_HEADERS := \
 	va.h \
 	va_version.h \
+	va_dec_hevc.h \
 	va_dec_jpeg.h \
 	va_dec_vp8.h \
 	va_enc.h \
@@ -102,10 +103,10 @@ LOCAL_SRC_FILES := \
 	android/va_android.cpp \
 	drm/va_drm_utils.c
 
-LOCAL_CFLAGS += \
+LOCAL_CFLAGS := \
 	-DANDROID -DLOG_TAG=\"libva-android\"
 
-LOCAL_C_INCLUDES += \
+LOCAL_C_INCLUDES := \
 	$(TARGET_OUT_HEADERS)/libva \
 	$(TARGET_OUT_HEADERS)/libdrm \
 	$(LOCAL_PATH)/drm
@@ -130,10 +131,10 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	egl/va_egl.c
 
-LOCAL_CFLAGS += \
+LOCAL_CFLAGS := \
 	-DANDROID -DLOG_TAG=\"libva-egl\"
 
-LOCAL_C_INCLUDES += \
+LOCAL_C_INCLUDES := \
 	$(TARGET_OUT_HEADERS)/libva \
 	$(LOCAL_PATH)/x11
 
@@ -156,9 +157,9 @@ include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := va_tpi.c
 
-LOCAL_CFLAGS += -DANDROID -DLOG_TAG=\"libva-tpi\"
+LOCAL_CFLAGS := -DANDROID -DLOG_TAG=\"libva-tpi\"
 
-LOCAL_C_INCLUDES += \
+LOCAL_C_INCLUDES := \
 	$(TARGET_OUT_HEADERS)/libva \
 	$(LOCAL_PATH)/..
 
