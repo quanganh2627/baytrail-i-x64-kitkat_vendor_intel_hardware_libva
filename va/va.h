@@ -331,7 +331,10 @@ typedef enum
     VAProfileH264MultiviewHigh          = 15,
     VAProfileH264StereoHigh             = 16,
     VAProfileHEVCMain                   = 17,
-    VAProfileHEVCMain10                 = 18
+    VAProfileHEVCMain10                 = 18,
+    VAProfileVP9Version0                = 19,
+    VAProfileAVS                        = 20,
+    VAProfileMax
 } VAProfile;
 
 /* 
@@ -399,6 +402,7 @@ typedef enum
      *
      **/
     VAEntrypointStatisticsIntel,
+    VAEntrypointMax
 } VAEntrypoint;
 
 /* Currently defined configuration attribute types */
