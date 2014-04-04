@@ -1331,6 +1331,8 @@ typedef enum
     VAEncMiscParameterTypeROI           = 10,
     /** \brief Buffer type used for Cyclic intra refresh */
     VAEncMiscParameterTypeCIR           = 11,
+    /** \brief Buffer type used for temporal layer structure */
+    VAEncMiscParameterTypeTemporalLayerStructure   = 12,
 
     /* Intel specific types start at 1001 */
     /* VAEntrypointEncFEIIntel */
@@ -1390,6 +1392,17 @@ typedef struct _VAEncMiscParameterBuffer
     VAEncMiscParameterType type;
     unsigned int data[0];
 } VAEncMiscParameterBuffer;
+
+/** \brief Temporal Structure*/
+typedef struct _VAEncMiscParameterTemporalLayerStructure
+{
+    /* The number of temporal layers */
+    uint32_t number_of_layers;
+    /* this is Length of the sequence defining frame layer membership. Should be 1-32 */
+    uint32_t periodicity;
+    /*This is Array indicating the layer id for each frame in a sequence of length ts_periodicity.*/
+    uint32_t layer_id[32];
+} VAEncMiscParameterTemporalLayerStructure;
 
 
 /** \brief Rate control parameters */
