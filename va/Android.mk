@@ -25,7 +25,11 @@
 
 LOCAL_PATH:= $(call my-dir)
 
-LIBVA_DRIVERS_PATH = /system/lib
+ifeq ($(TARGET_ARCH), x86_64)
+  LIBVA_DRIVERS_PATH = /system/lib64
+else
+  LIBVA_DRIVERS_PATH = /system/lib
+endif
 
 # Version set to Android Jelly Bean
 ALOG_VERSION_REQ := 4.1
