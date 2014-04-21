@@ -1722,6 +1722,7 @@ static void va_TraceVAEncMiscParameterBuffer(
 {
     VAEncMiscParameterBuffer* tmp = (VAEncMiscParameterBuffer*)data;
     DPY2TRACECTX(dpy);
+    uint32_t i;
     
     switch (tmp->type) {
     case VAEncMiscParameterTypeFrameRate:
@@ -1781,6 +1782,16 @@ static void va_TraceVAEncMiscParameterBuffer(
 
         va_TraceMsg(trace_ctx, "\t--VAEncMiscParameterTypeMaxFrameSize\n");
         va_TraceMsg(trace_ctx, "\tmax_frame_size = %d\n", p->max_frame_size);
+        break;
+    }
+    case VAEncMiscParameterTypeTemporalLayerStructure:
+    {
+        VAEncMiscParameterTemporalLayerStructure *p = (VAEncMiscParameterTemporalLayerStructure *)tmp->data;
+        va_TraceMsg(trace_ctx,"\t--VAEncMiscParameterTypeTemporalLayerStructure\n");
+        va_TraceMsg(trace_ctx,"\tnumber_of_layers = %d\n", p->number_of_layers);
+        va_TraceMsg(trace_ctx,"\tperiodicity = %d\n", p->periodicity);
+        for(i=0;i<p->periodicity;i++)
+                va_TraceMsg(trace_ctx,"\tlayer_id[%d] = %d\n", i, p->layer_id[i]);
         break;
     }
     default:
@@ -1983,7 +1994,7 @@ static void va_TraceVAEncPictureParameterBufferVP8(
     va_TraceMsg(trace_ctx, "\tref_flags.bits.no_ref_last = %d\n", p->ref_flags.bits.no_ref_last);
     va_TraceMsg(trace_ctx, "\tref_flags.bits.no_ref_gf = %d\n", p->ref_flags.bits.no_ref_gf);
     va_TraceMsg(trace_ctx, "\tref_flags.bits.no_ref_arf = %d\n", p->ref_flags.bits.no_ref_arf);
-    va_TraceMsg(trace_ctx, "\tref_flags.bits.no_ref_arf = 0x%08x\n", p->ref_flags.bits.reserved);
+    va_TraceMsg(trace_ctx, "\tref_flags.bits.reserved = 0x%08x\n", p->ref_flags.bits.reserved);
     
     va_TraceMsg(trace_ctx, "\tpic_flags.bits.frame_type = %d\n", p->pic_flags.bits.frame_type);
     va_TraceMsg(trace_ctx, "\tpic_flags.bits.version = %d\n", p->pic_flags.bits.version);
