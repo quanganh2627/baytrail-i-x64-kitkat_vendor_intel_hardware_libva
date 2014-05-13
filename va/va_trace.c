@@ -2008,6 +2008,7 @@ static void va_TraceVAEncMiscParameterBuffer(
         VAEncMiscParameterFrameRate *p = (VAEncMiscParameterFrameRate *)tmp->data;
         va_TraceMsg(trace_ctx, "\t--VAEncMiscParameterFrameRate\n");
         va_TraceMsg(trace_ctx, "\tframerate = %d\n", p->framerate);
+        va_TraceMsg(trace_ctx, "\tframerate_flags.bits.temporal_id = %d\n", p->framerate_flags.bits.temporal_id);
         
         break;
     }
@@ -2025,6 +2026,8 @@ static void va_TraceVAEncMiscParameterBuffer(
         va_TraceMsg(trace_ctx, "\trc_flags.reset = %d \n", p->rc_flags.bits.reset);
         va_TraceMsg(trace_ctx, "\trc_flags.disable_frame_skip = %d\n", p->rc_flags.bits.disable_frame_skip);
         va_TraceMsg(trace_ctx, "\trc_flags.disable_bit_stuffing = %d\n", p->rc_flags.bits.disable_bit_stuffing);
+        va_TraceMsg(trace_ctx, "\trc_flags.bits.temporal_id = %d\n", p->rc_flags.bits.temporal_id);
+
         break;
     }
     case VAEncMiscParameterTypeMaxSliceSize:
