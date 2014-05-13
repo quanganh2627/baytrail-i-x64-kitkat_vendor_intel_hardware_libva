@@ -714,7 +714,6 @@ typedef enum {
         VAEncBitstreamAttribMiscMask | 1),
 } VAEncBitstreamAttribTypeH264;
 
-
 /**
  * \brief Allocates a new H.264 bitstream writer.
  *
