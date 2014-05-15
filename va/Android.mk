@@ -25,12 +25,6 @@
 
 LOCAL_PATH:= $(call my-dir)
 
-ifeq ($(TARGET_ARCH), x86_64)
-  LIBVA_DRIVERS_PATH = /system/lib64
-else
-  LIBVA_DRIVERS_PATH = /system/lib
-endif
-
 # Version set to Android Jelly Bean
 ALOG_VERSION_REQ := 4.1
 ALOG_VERSION := $(filter $(ALOG_VERSION_REQ),$(firstword $(sort $(PLATFORM_VERSION) \
@@ -48,7 +42,6 @@ LOCAL_SRC_FILES := \
 
 LOCAL_CFLAGS += \
 	-DANDROID \
-	-DVA_DRIVERS_PATH="\"$(LIBVA_DRIVERS_PATH)\"" \
 	-DLOG_TAG=\"libva\"
 
 # Android Jelly Bean defined ALOGx, older versions use LOGx
