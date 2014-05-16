@@ -3213,7 +3213,7 @@ typedef struct _VADisplayAttribute
     VADisplayAttribType type;
     int min_value;
     int max_value;
-    int value;	/* used by the set/get attribute functions */
+    long value;	/* used by the set/get attribute functions */
 /* flags can be VA_DISPLAY_ATTRIB_GETTABLE or VA_DISPLAY_ATTRIB_SETTABLE or OR'd together */
     void *attrib_ptr; /* if flags contains VA_DISPLAY_ATTRIB_POINTER, then "attrib_ptr" points to a structure for this display attribute */
     unsigned int flags;
