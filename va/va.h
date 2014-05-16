@@ -1518,7 +1518,7 @@ typedef struct _VAEncMiscParameterRateControl
              */ 
             unsigned int temporal_id : 8; 
             unsigned int cfs_I_frames : 1; /** I frame also follows CFS */
-            unsigned int reserved : 17;
+            unsigned int reserved : 16;
         } bits;
         unsigned int value;
     } rc_flags;
