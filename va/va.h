@@ -3215,8 +3215,8 @@ typedef struct _VADisplayAttribute
     int max_value;
     long value;	/* used by the set/get attribute functions */
 /* flags can be VA_DISPLAY_ATTRIB_GETTABLE or VA_DISPLAY_ATTRIB_SETTABLE or OR'd together */
-    void *attrib_ptr; /* if flags contains VA_DISPLAY_ATTRIB_POINTER, then "attrib_ptr" points to a structure for this display attribute */
     unsigned int flags;
+    void *attrib_ptr; /* if flags contains VA_DISPLAY_ATTRIB_POINTER, then "attrib_ptr" points to a structure for this display attribute */
 } VADisplayAttribute;
 
 /* Get maximum number of display attributs supported by the implementation */
