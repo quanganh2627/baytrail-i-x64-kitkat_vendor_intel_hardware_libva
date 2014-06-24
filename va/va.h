@@ -78,6 +78,7 @@
 #ifndef _VA_H_
 #define _VA_H_
 
+#include <stddef.h>
 #include <stdint.h>
 #include <va/va_version.h>
 
@@ -182,6 +183,8 @@ typedef int VAStatus;	/** Return status type from functions */
 #define VA_STATUS_ERROR_HW_BUSY	                0x00000022
 /** \brief An invalid blend state was supplied. */
 #define VA_STATUS_ERROR_INVALID_BLEND_STATE     0x00000023
+/** \brief An unsupported memory type was supplied. */
+#define VA_STATUS_ERROR_UNSUPPORTED_MEMORY_TYPE 0x00000024
 #define VA_STATUS_ERROR_UNKNOWN			0xFFFFFFFF
 
 /** De-interlacing flags for vaPutSurface() */
@@ -1316,18 +1319,18 @@ typedef enum
     VAParsePictureParameterBufferType   = 43,
     VAParseSliceHeaderGroupBufferType   = 44,
 
-/* Following are all other buffer types */
-    VAProcessingBufferType              = 101,
-
     /**
      * \brief Intel specific buffer types start at 1001
      */
     VAEncFEIMVBufferTypeIntel                 = 1001,
     VAEncFEIModeBufferTypeIntel,
     VAEncFEIDistortionBufferTypeIntel,
+    VAEncFEIMBControlBufferTypeIntel,
+    VAEncFEIMVPredictorBufferTypeIntel,
     VAStatsStatisticsParameterBufferTypeIntel,
     VAStatsStatisticsBufferTypeIntel,
     VAStatsMotionVectorBufferTypeIntel,
+    VAStatsMVPredictorBufferTypeIntel,
 
     VABufferTypeMax
 } VABufferType;
@@ -1335,7 +1338,7 @@ typedef enum
 /** 
  * Processing rate parameter for encode. 
  */
-typedef struct _VAProcessingRateBufferEnc {
+typedef struct _VAProcessingRateParamsEnc {
     /** \brief Profile level */
     unsigned char       level_idc;
     unsigned char       reserved[3];
@@ -1347,17 +1350,24 @@ typedef struct _VAProcessingRateBufferEnc {
     unsigned int        intra_period;
     /** \brief Period between I/P frames. */
     unsigned int        ip_period;
-} VAProcessingRateBufferEnc;
+} VAProcessingRateParamsEnc;
 
 /** 
  * Processing rate parameter for decode. 
  */
-typedef struct _VAProcessingRateBufferDec {
+typedef struct _VAProcessingRateParamsDec {
     /** \brief Profile level */
     unsigned char       level_idc;
     unsigned char       reserved0[3];
     unsigned int        reserved;
-} VAProcessingRateBufferDec;
+} VAProcessingRateParamsDec;
+
+typedef struct _VAProcessingRateParams {
+    union {
+        VAProcessingRateParamsEnc proc_buf_enc;
+        VAProcessingRateParamsDec proc_buf_dec;
+    };
+} VAProcessingRateParams;
 
 /**
  * \brief Queries processing rate for the supplied config.
@@ -1382,8 +1392,8 @@ typedef struct _VAProcessingRateBufferDec {
 VAStatus
 vaQueryProcessingRate(
     VADisplay           dpy,
-    VAConfigID          config_id,
-    VABufferID          proc_buf,
+    VAConfigID          config,
+    VAProcessingRateParams *proc_buf,
     unsigned int       *processing_rate
 );
 
@@ -1471,15 +1481,15 @@ typedef struct _VAEncMiscParameterBuffer
     unsigned int data[0];
 } VAEncMiscParameterBuffer;
 
-/** \brief Temporal Structure*/
+/** \brief Temporal layer Structure*/
 typedef struct _VAEncMiscParameterTemporalLayerStructure
 {
     /* The number of temporal layers */
-    uint32_t number_of_layers;
+    unsigned int number_of_layers;
     /* this is Length of the sequence defining frame layer membership. Should be 1-32 */
-    uint32_t periodicity;
+    unsigned int periodicity;
     /*This is Array indicating the layer id for each frame in a sequence of length ts_periodicity.*/
-    uint32_t layer_id[32];
+    unsigned int layer_id[32];
 } VAEncMiscParameterTemporalLayerStructure;
 
 
@@ -1782,6 +1792,37 @@ typedef struct _VASliceParameterBufferBase
     unsigned int slice_data_offset;	/* the offset to the first byte of slice data */
     unsigned int slice_data_flag;	/* see VA_SLICE_DATA_FLAG_XXX definitions */
 } VASliceParameterBufferBase;
+
+/** \brief VAEncFEIMVBufferTypeIntel and VAStatsMotionVectorBufferTypeIntel. Motion vector buffer layout.
+ * Motion vector output is per 4x4 block. For each 4x4 block there is a pair of past and future 
+ * reference MVs as defined in VAMotionVectorIntel. Depending on Subblock partition, 
+ * for the shape that is not 4x4, the MV is replicated so each 4x4 block has a pair of MVs. 
+ * If only past reference is used, future MV should be ignored, and vice versa. 
+ * The 16x16 block is in raster scan order, within the 16x16 block, each 4x4 block MV is ordered as below in memory. 
+ * The buffer size shall be greater than or equal to the number of 16x16 blocks multiplied by (sizeof(VAMotionVector) * 16).
+ *
+ *                      16x16 Block        
+ *        -----------------------------------------
+ *        |    1    |    2    |    5    |    6    |
+ *        -----------------------------------------
+ *        |    3    |    4    |    7    |    8    |
+ *        -----------------------------------------
+ *        |    9    |    10   |    13   |    14   |
+ *        -----------------------------------------
+ *        |    11   |    12   |    15   |    16   |
+ *        -----------------------------------------
+ *
+ **/
+
+/** \brief Motion vector data structure. */
+typedef struct _VAMotionVectorIntel {
+    /** \mv0[0]: horizontal motion vector for past reference */
+    /** \mv0[1]: vertical motion vector for past reference */
+    /** \mv1[0]: horizontal motion vector for future reference */
+    /** \mv1[1]: vertical motion vector for future reference */
+    short  mv0[2];  /* past reference */
+    short  mv1[2];  /* future reference */
+} VAMotionVectorIntel;
 
 #include <va/va_dec_jpeg.h>
 
@@ -2547,7 +2588,7 @@ typedef  struct _VACodedBufferSegment  {
      */
     void               *next;
 } VACodedBufferSegment;
-     
+
 
 /**
  * H.264 Parsed Slice Header Group Info
@@ -2694,6 +2735,108 @@ VAStatus vaDestroyBuffer (
     VADisplay dpy,
     VABufferID buffer_id
 );
+
+/** \brief VA buffer information */
+typedef struct {
+    /** \brief Buffer handle */
+    uintptr_t           handle;
+    /** \brief Buffer type (See \ref VABufferType). */
+    uint32_t            type;
+    /**
+     * \brief Buffer memory type (See \ref VASurfaceAttribMemoryType).
+     *
+     * On input to vaAcquireBufferHandle(), this field can serve as a hint
+     * to specify the set of memory types the caller is interested in.
+     * On successful return from vaAcquireBufferHandle(), the field is
+     * updated with the best matching memory type.
+     */
+    uint32_t            mem_type;
+    /** \brief Size of the underlying buffer. */
+    size_t              mem_size;
+} VABufferInfo;
+
+/**
+ * \brief Acquires buffer handle for external API usage
+ *
+ * Locks the VA buffer object \ref buf_id for external API usage like
+ * EGL or OpenCL (OCL). This function is a synchronization point. This
+ * means that any pending operation is guaranteed to be completed
+ * prior to returning from the function.
+ *
+ * If the referenced VA buffer object is the backing store of a VA
+ * surface, then this function acts as if vaSyncSurface() on the
+ * parent surface was called first.
+ *
+ * The \ref VABufferInfo argument shall be zero'ed on input. On
+ * successful output, the data structure is filled in with all the
+ * necessary buffer level implementation details like handle, type,
+ * memory type and memory size.
+ *
+ * Note: the external API implementation, or the application, can
+ * express the memory types it is interested in by filling in the \ref
+ * mem_type field accordingly. On successful output, the memory type
+ * that fits best the request and that was used is updated in the \ref
+ * VABufferInfo data structure. If none of the supplied memory types
+ * is supported, then a \ref VA_STATUS_ERROR_UNSUPPORTED_MEMORY_TYPE
+ * error is returned.
+ *
+ * The \ref VABufferInfo data is valid until vaReleaseBufferHandle()
+ * is called. Besides, no additional operation is allowed on any of
+ * the buffer parent object until vaReleaseBufferHandle() is called.
+ * e.g. decoding into a VA surface backed with the supplied VA buffer
+ * object \ref buf_id would fail with a \ref VA_STATUS_ERROR_SURFACE_BUSY
+ * error.
+ *
+ * Possible errors:
+ * - \ref VA_STATUS_ERROR_UNIMPLEMENTED: the VA driver implementation
+ *   does not support this interface
+ * - \ref VA_STATUS_ERROR_INVALID_DISPLAY: an invalid display was supplied
+ * - \ref VA_STATUS_ERROR_INVALID_BUFFER: an invalid buffer was supplied
+ * - \ref VA_STATUS_ERROR_UNSUPPORTED_BUFFERTYPE: the implementation
+ *   does not support exporting buffers of the specified type
+ * - \ref VA_STATUS_ERROR_UNSUPPORTED_MEMORY_TYPE: none of the requested
+ *   memory types in \ref VABufferInfo.mem_type was supported
+ *
+ * @param[in] dpy               the VA display
+ * @param[in] buf_id            the VA buffer
+ * @param[in,out] buf_info      the associated VA buffer information
+ * @return VA_STATUS_SUCCESS if successful
+ */
+VAStatus
+vaAcquireBufferHandle(VADisplay dpy, VABufferID buf_id, VABufferInfo *buf_info);
+
+/**
+ * \brief Releases buffer after usage from external API
+ *
+ * Unlocks the VA buffer object \ref buf_id from external API usage like
+ * EGL or OpenCL (OCL). This function is a synchronization point. This
+ * means that any pending operation is guaranteed to be completed
+ * prior to returning from the function.
+ *
+ * The \ref VABufferInfo argument shall point to the original data
+ * structure that was obtained from vaAcquireBufferHandle(), unaltered.
+ * This is necessary so that the VA driver implementation could
+ * deallocate any resources that were needed.
+ *
+ * In any case, returning from this function invalidates any contents
+ * in \ref VABufferInfo. i.e. the underlyng buffer handle is no longer
+ * valid. Therefore, VA driver implementations are free to reset this
+ * data structure to safe defaults.
+ *
+ * Possible errors:
+ * - \ref VA_STATUS_ERROR_UNIMPLEMENTED: the VA driver implementation
+ *   does not support this interface
+ * - \ref VA_STATUS_ERROR_INVALID_DISPLAY: an invalid display was supplied
+ * - \ref VA_STATUS_ERROR_INVALID_BUFFER: an invalid buffer was supplied
+ * - \ref VA_STATUS_ERROR_UNSUPPORTED_BUFFERTYPE: the implementation
+ *   does not support exporting buffers of the specified type
+ *
+ * @param[in] dpy               the VA display
+ * @param[in] buf_id            the VA buffer
+ * @return VA_STATUS_SUCCESS if successful
+ */
+VAStatus
+vaReleaseBufferHandle(VADisplay dpy, VABufferID buf_id);
 
 /*
 Render (Decode) Pictures

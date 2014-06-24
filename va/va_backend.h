@@ -99,13 +99,6 @@ struct VADriverVTable
 		int *num_attribs		/* out */
 	);
 
-	VAStatus (*vaQueryProcessingRate) (
-		VADriverContextP ctx,
-		VAConfigID config_id, 
-		VABufferID buf_id,
-		unsigned int *processing_rate	/* out */
-	);
-
 	VAStatus (*vaCreateSurfaces) (
 		VADriverContextP ctx,
 		int width,
@@ -426,6 +419,26 @@ struct VADriverVTable
             VASurfaceAttrib    *attrib_list,
             unsigned int       *num_attribs
         );
+
+        VAStatus
+        (*vaAcquireBufferHandle)(
+            VADriverContextP    ctx,
+            VABufferID          buf_id,         /* in */
+            VABufferInfo *      buf_info        /* in/out */
+        );
+
+        VAStatus
+        (*vaReleaseBufferHandle)(
+            VADriverContextP    ctx,
+            VABufferID          buf_id          /* in */
+        );
+
+       VAStatus (*vaQueryProcessingRate) (
+               VADriverContextP ctx,
+               VAConfigID config_id,
+               VAProcessingRateParams *proc_buf,
+               unsigned int *processing_rate	/* out */
+       );
 };
 
 struct VADriverContext
