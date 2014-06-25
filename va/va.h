@@ -1532,7 +1532,12 @@ typedef struct _VAEncMiscParameterRateControl
         } bits;
         unsigned int value;
     } rc_flags;
-    unsigned int ICQ_quality_factor; /* Initial ICQ quality factor: 1-51. */
+    /* Initial ICQ quality factor: 1-51. */
+    unsigned int ICQ_quality_factor;
+    /* the allowed number of consecutive dropped frame.
+       if set it to 0, encoder will not drop any frame.
+    */
+    unsigned int max_num_of_consecutive_drop_frames;
 } VAEncMiscParameterRateControl;
 
 typedef struct _VAEncMiscParameterFrameRate

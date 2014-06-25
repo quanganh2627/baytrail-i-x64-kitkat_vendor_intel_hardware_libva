@@ -2022,7 +2022,9 @@ static void va_TraceVAEncMiscParameterBuffer(
         va_TraceMsg(trace_ctx, "\twindow_size = %d\n", p->window_size);
         va_TraceMsg(trace_ctx, "\tinitial_qp = %d\n", p->initial_qp);
         va_TraceMsg(trace_ctx, "\tmin_qp = %d\n", p->min_qp);
+        va_TraceMsg(trace_ctx, "\tmax_qp = %d\n", p->max_qp);
         va_TraceMsg(trace_ctx, "\tbasic_unit_size = %d\n", p->basic_unit_size);
+        va_TraceMsg(trace_ctx, "\tmax_num_of_consecutive_drop_frames = %d\n", p->max_num_of_consecutive_drop_frames);
         va_TraceMsg(trace_ctx, "\trc_flags.reset = %d \n", p->rc_flags.bits.reset);
         va_TraceMsg(trace_ctx, "\trc_flags.disable_frame_skip = %d\n", p->rc_flags.bits.disable_frame_skip);
         va_TraceMsg(trace_ctx, "\trc_flags.disable_bit_stuffing = %d\n", p->rc_flags.bits.disable_bit_stuffing);
@@ -2054,6 +2056,7 @@ static void va_TraceVAEncMiscParameterBuffer(
 
         va_TraceMsg(trace_ctx, "\t--VAEncMiscParameterHRD\n");
         va_TraceMsg(trace_ctx, "\tinitial_buffer_fullness = %d\n", p->initial_buffer_fullness);
+        va_TraceMsg(trace_ctx, "\toptimal_buffer_fullness = %d\n", p->optimal_buffer_fullness);
         va_TraceMsg(trace_ctx, "\tbuffer_size = %d\n", p->buffer_size);
         break;
     }
