@@ -1262,9 +1262,6 @@ typedef enum
     VAParsePictureParameterBufferType   = 43,
     VAParseSliceHeaderGroupBufferType   = 44,
 
-/* Following are all other buffer types */
-    VAProcessingBufferType              = 101,
-
     /**
      * \brief Intel specific buffer types start at 1001
      */
@@ -1281,7 +1278,7 @@ typedef enum
 /** 
  * Processing rate parameter for encode. 
  */
-typedef struct _VAProcessingRateBufferEnc {
+typedef struct _VAProcessingRateParamsEnc {
     /** \brief Profile level */
     unsigned char       level_idc;
     unsigned char       reserved[3];
@@ -1293,17 +1290,24 @@ typedef struct _VAProcessingRateBufferEnc {
     unsigned int        intra_period;
     /** \brief Period between I/P frames. */
     unsigned int        ip_period;
-} VAProcessingRateBufferEnc;
+}VAProcessingRateParamsEnc;
 
 /** 
  * Processing rate parameter for decode. 
  */
-typedef struct _VAProcessingRateBufferDec {
+typedef struct _VAProcessingRateParamsDec {
     /** \brief Profile level */
     unsigned char       level_idc;
     unsigned char       reserved0[3];
     unsigned int        reserved;
-} VAProcessingRateBufferDec;
+} VAProcessingRateParamsDec;
+
+typedef struct _VAProcessingRateParams {
+    union {
+        VAProcessingRateParamsEnc proc_buf_enc;
+        VAProcessingRateParamsDec proc_buf_dec;
+    };
+} VAProcessingRateParams;
 
 /**
  * \brief Queries processing rate for the supplied config.
@@ -1329,7 +1333,7 @@ VAStatus
 vaQueryProcessingRate(
     VADisplay           dpy,
     VAConfigID          config,
-    VABufferID          proc_buf,
+    VAProcessingRateParams  *proc_buf,
     unsigned int       *processing_rate
 );
 
