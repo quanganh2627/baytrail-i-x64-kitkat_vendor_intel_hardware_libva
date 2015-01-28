@@ -335,7 +335,8 @@ typedef enum
     VAProfileH264StereoHigh             = 16,
     VAProfileHEVCMain                   = 17,
     VAProfileHEVCMain10                 = 18,
-    VAProfileVP9Version0                = 19
+    VAProfileVP9Version0                = 19,
+    VAProfileVP9Version0Still           = 20
 } VAProfile;
 
 /**
@@ -437,6 +438,39 @@ typedef enum
      * VAConfigAttribValDecJPEG union.
      */
     VAConfigAttribDecJPEG             = 7,
+    /**
+     * \brief Decode processing support. Read/write.
+     *
+     * This attribute determines if the driver supports video processing 
+     * with decoding using the decoding context in a single call, through 
+     * vaGetConfigAttributes(); and if the user may use this feature, 
+     * through vaCreateConfig(), if the driver supports the user scenario.
+     * The user will essentially create a regular decode VAContext.  Therefore, 
+     * the parameters of vaCreateContext() such as picture_width, picture_height 
+     * and render_targets are in relation to the decode output parameters 
+     * (not processing output parameters) as normal.
+     * If this attribute is not set by the user then it is assumed that no 
+     * extra processing is done after decoding for this decode context.  
+     *
+     * Since essentially the application is creating a decoder config and context, 
+     * all function calls that take in the config (e.g. vaQuerySurfaceAttributes()) 
+     * or context are in relation to the decoder, except those video processing 
+     * function specified in the next paragraph.
+     *
+     * Once the decode config and context are created, the user must further  
+     * query the supported processing filters using vaQueryVideoProcFilters(), 
+     * vaQueryVideoProcFilterCaps(), vaQueryVideoProcPipelineCaps() by specifying 
+     * the created decode context.  The user must provide processing information 
+     * and extra processing output surfaces as "additional_outputs" to the driver 
+     * through VAProcPipelineParameterBufferType.  The render_target specified
+     * at vaBeginPicture() time refers to the decode output surface.  The 
+     * target surface for the output of processing needs to be a different 
+     * surface since the decode process requires the original reconstructed buffer.  
+     * The “surface” member of VAProcPipelineParameterBuffer should be set to the 
+     * same as “render_target” set in vaBeginPicture(), but the driver may choose 
+     * to ignore this parameter.
+     */
+    VAConfigAttribDecProcessing		= 8,
 
     /** @name Attributes for encoding */
     /**@{*/
@@ -578,12 +612,13 @@ typedef enum
      * \brief Encoding region-of-interest (ROI) attribute. Read-only.
      *
      * This attribute conveys whether the driver supports region-of-interest (ROI) encoding,
-     * based on user provided ROI rectangles.  The attribute value returned indicates the number
-     * of regions that are supported.  e.g. A value of 0 means ROI encoding is not supported.
+     * based on user provided ROI rectangles.  The attribute value is partitioned into fields
+     * as defined in the VAConfigAttribValEncROI union.     
+     *
      * If ROI encoding is supported, the ROI information is passed to the driver using
-     * VAEncMiscParameterTypeRoi.
+     * VAEncMiscParameterTypeROI.
      */
-    VAConfigAttribEncRoi              = 25,
+    VAConfigAttribEncROI              = 25,
     /**
      * \brief Encoding extended rate control attribute. Read-only.
      *
@@ -602,6 +637,55 @@ typedef enum
      * encode or decode processing rate.
      */
     VAConfigAttribProcessingRate    = 27,
+    /**
+     * \brief Encoding dirty region-of-interest. Read-only.
+     *
+     * This attribute conveys whether the driver supports dirty region-of-interest (ROI) 
+     * encoding, based on user provided ROI rectangles which indicate the rectangular areas
+     * where the content has changed as compared to the previous picture.  The regions of the
+     * picture that are not covered by dirty ROI rectangles are assumed to have not changed 
+     * compared to the previous picture.  The encoder may do some optimizations based on 
+     * this information.  The attribute value returned indicates the number of regions that
+     * are supported.  e.g. A value of 0 means dirty ROI encoding is not supported.  If dirty
+     * ROI encoding is supported, the ROI information is passed to the driver using
+     * VAEncMiscParameterTypeDirtyROI.
+     */
+     VAConfigAttribEncDirtyROI       = 28,
+
+    /**
+     * \brief Parallel Rate Control (hierachical B) attribute. Read-only.
+     * This attribute conveys whether the encoder supports parallel rate control.
+     * It is a boolean value 0 - unsupported, 1 - supported.
+     * This is the way when hireachical B frames are encoded, multiple independent B frames 
+     * on the same layer may be processed at same time.
+     * If supported, app may enable it by setting enable_parallel_brc in
+     * VAEncMiscParameterRateControl,
+     * and the number of B frames per layer per GOP will be passed to driver
+     * through VAEncMiscParameterParallelRateControl structure.
+     * Currently three layers are defined. 
+     */
+     VAConfigAttribEncParallelRateControl   = 29,
+
+    /**
+     * \brief Dynamic Scaling Attribute. Read-only.
+     * This attribute conveys whether encoder is capable to determine dynamic frame
+     * resolutions adaptive to bandwidth utilization and processing power, etc., as well
+     * as capable to scale raw source and reference frames.
+     * It is a boolean value 0 - unsupported, 1 - supported.
+     * If it is supported, app may enable it by setting enable_dynamic_scaling in 
+     * VAEncMiscParameterRateControl.
+     */
+     VAConfigAttribEncDynamicScaling        = 30,
+
+    /**
+     * \brief Tile Support Attribute. Read-only.
+     * This attribute conveys whether encoder is capable to support tiles.
+     * If not supported, the tile related parameters sent to encoder, such as
+     * tiling structure, should be ignored.
+     * It is a boolean value 0 - unsupported, 1 - supported.
+     */
+     VAConfigAttribEncTileSupport        = 31,
+
     /**
      * \brief Intel specific attributes start at 1001 
      */
@@ -649,6 +733,9 @@ typedef struct _VAConfigAttrib {
 #define VA_RT_FORMAT_YUV444	0x00000004
 #define VA_RT_FORMAT_YUV411	0x00000008
 #define VA_RT_FORMAT_YUV400	0x00000010
+/** YUV formats with more than 8 bpp */
+#define VA_RT_FORMAT_YUV420_10BPP	0x00000100
+/** RGB formats */
 #define VA_RT_FORMAT_RGB16	0x00010000
 #define VA_RT_FORMAT_RGB32	0x00020000
 /* RGBP covers RGBP and BGRP fourcc */ 
@@ -677,6 +764,17 @@ typedef struct _VAConfigAttrib {
 #define VA_RC_MB                        0x00000080
 /** \brief Constant Frame Size */
 #define VA_RC_CFS                       0x00000100
+/** \brief Parallel BRC, for hierachical B.  
+ *  For hierachical B, B frames can be refered by other B frames.
+ *  Currently three layers of hierachy are defined:
+ *  B0 - regular B, no reference to other B frames.
+ *  B1 - reference to only I, P and regular B0 frames.
+ *  B2 - reference to any other frames, including B1.
+ *  In Hierachical B structure, B frames on the same layer can be processed 
+ *  simultaneously. And BRC would adjust accordingly. This is so called
+ *  Parallel BRC.
+ */
+#define VA_RC_PARALLEL                  0x00000200
 
 /**@}*/
 
@@ -695,6 +793,14 @@ typedef union _VAConfigAttribValDecJPEG {
     /** \brief Reserved for future use. */
     unsigned int reserved[3]; 
 } VAConfigAttribValDecJPEG;
+/**@}*/
+
+/** @name Attribute values for VAConfigAttribDecProcessing */
+/**@{*/
+/** \brief No decoding + processing in a single decoding call. */
+#define VA_DEC_PROCESSING_NONE     0x00000000
+/** \brief Decode + processing in a single decoding call. */
+#define VA_DEC_PROCESSING          0x00000001
 /**@}*/
 
 /** @name Attribute values for VAConfigAttribEncPackedHeaders */
@@ -783,6 +889,23 @@ typedef union _VAConfigAttribValEncJPEG {
 #define VA_ENC_INTRA_REFRESH_ADAPTIVE                   0x00000010
 /** \brief Driver supports cyclic intra refresh */
 #define VA_ENC_INTRA_REFRESH_CYCLIC                     0x00000020
+
+/**@}*/
+
+/** \brief Attribute value for VAConfigAttribEncROI */
+typedef union _VAConfigAttribValEncROI {
+    struct {
+     	/** \brief The number of ROI regions supported, 0 if ROI is not supported. */
+     	unsigned int num_roi_regions 		: 8;
+	/** \brief Indicates if ROI priority indication is supported when
+         * VAConfigAttribRateControl != VA_RC_CQP, else only ROI delta QP added on top of
+         * the frame level QP is supported when VAConfigAttribRateControl == VA_RC_CQP.
+         */
+	unsigned int roi_rc_priority_support	: 1;
+	unsigned int reserved                   : 23;
+     } bits;
+     unsigned int value;
+} VAConfigAttribValEncROI;
 
 /**@}*/
 
@@ -1335,7 +1458,7 @@ typedef struct _VAProcessingRateParamsEnc {
     /** \brief Profile level */
     unsigned char       level_idc;
     unsigned char       reserved[3];
-    /** \brief quality level. When set to 0 or 0xffffffff, default quality 
+    /** \brief quality level. When set to 0, default quality
      * level is used. 
      */
     unsigned int       quality_level;
@@ -1414,6 +1537,10 @@ typedef enum
     VAEncMiscParameterTypeCIR           = 11,
     /** \brief Buffer type used for temporal layer structure */
     VAEncMiscParameterTypeTemporalLayerStructure   = 12,
+    /** \brief Buffer type used for dirty region-of-interest (ROI) parameters. */
+    VAEncMiscParameterTypeDirtyROI      = 13,
+    /** \brief Buffer type used for parallel BRC parameters. */
+    VAEncMiscParameterTypeParallelBRC   = 14,
 
     /* Intel specific types start at 1001 */
     /* VAEntrypointEncFEIIntel */
@@ -1521,7 +1648,9 @@ typedef struct _VAEncMiscParameterRateControl
              */ 
             unsigned int temporal_id : 8; 
             unsigned int cfs_I_frames : 1; /* I frame also follows CFS */
-            unsigned int reserved : 16;
+            unsigned int enable_parallel_brc    : 1;
+            unsigned int enable_dynamic_scaling : 1;
+            unsigned int reserved               : 14;
         } bits;
         unsigned int value;
     } rc_flags;
@@ -1676,7 +1805,9 @@ typedef struct _VAEncMiscParameterBufferMaxFrameSize {
  * consumption, with higher quality corresponds to lower speed and higher power consumption. 
  */
 typedef struct _VAEncMiscParameterBufferQualityLevel {
-    /** \brief Encoding quality level setting. */
+    /** \brief Encoding quality level setting. When set to 0, default quality
+     * level is used.
+     */
     unsigned int                quality_level;
 } VAEncMiscParameterBufferQualityLevel;
 
@@ -1734,36 +1865,73 @@ typedef struct _VAEncMiscParameterSkipFrame {
 /**
  * \brief Encoding region-of-interest (ROI).
  *
- * The encoding ROI can be set through this structure, if the implementation
+ * The encoding ROI can be set through VAEncMiscParameterBufferROI, if the implementation
  * supports ROI input. The ROI set through this structure is applicable only to the
- * current frame.  The number of supported ROIs can be queried through the
- * VAConfigAttribEncRoi.  The encoder will use the ROI information to adjust the QP
- * values of the MB's that fall within the ROIs.
+ * current frame or field, so must be sent every frame or field to be applied.  The number of
+ * supported ROIs can be queried through the VAConfigAttribEncROI.  The encoder will use the
+ * ROI information to adjust the QP values of the MB's that fall within the ROIs.
  */
-typedef struct _VAEncMiscParameterBufferRoi {
-    /** \brief Number of ROIs being sent.*/
-    unsigned int                num_roi;
-    /** \brief Valid when VAConfigAttribRateControl != VA_RC_CQP, then the encoder's
-     *  rate control will determine actual delta QPs.  Specifies the max/min allowed delta QPs.*/
-    char                        max_delta_qp;
-    char                        min_delta_qp;
-
-    /** \brief Pointer to a VAEncROI array with num_ROI elements.*/
-    struct VAEncROI
-    {
+typedef struct _VAEncROI
+{
         /** \brief Defines the ROI boundary in pixels, the driver will map it to appropriate
-         *  codec coding units.  It is relative to the frame coordinates for both frame and field cases. */
-        VARectangle             roi_rectangle;
-        /** \brief When VAConfigAttribRateControl == VA_RC_CQP then roi_value specifes the delta QP that
-         *  will be added on top of the frame level QP.  For other rate control modes, roi_value specifies the
-         *  priority of the ROI region relative to the non-ROI region.  It can positive (more important) or
-         *  negative (less important) values and is compared with non-ROI region (taken as value 0).
-         *  E.g. ROI region with roi_value -3 is less important than the non-ROI region (roi_value implied to be 0)
-         *  which is less important than ROI region with roi_value +2.  For overlapping regions, the roi_value
-         *  that is first in the ROI array will have priority.   */
-        char                    roi_value;
-    } *ROI;
+         *  codec coding units.  It is relative to frame coordinates for the frame case and 
+    	 *  to field coordinates for the field case. */
+        VARectangle     roi_rectangle;
+        /** \brief When VAConfigAttribRateControl == VA_RC_CQP then roi_value specifes the
+	 *  delta QP that will be added on top of the frame level QP.  For other rate control
+	 *  modes, roi_value specifies the priority of the ROI region relative to the non-ROI
+	 *  region.  It can be positive (more important) or negative (less important) values
+         *  and is compared with non-ROI region (taken as value 0).
+         *  E.g. ROI region with roi_value -3 is less important than the non-ROI region
+	 *  (roi_value implied to be 0) which is less important than ROI region with 
+	 *  roi_value +2.  For overlapping regions, the roi_value that is first in the ROI 
+	 *  array will have priority.   */
+        char            roi_value;
+} VAEncROI;
+
+typedef struct _VAEncMiscParameterBufferROI {
+    /** \brief Number of ROIs being sent.*/
+    unsigned int        num_roi;
+
+    /** \brief Valid when VAConfigAttribRateControl != VA_RC_CQP, then the encoder's
+     *  rate control will determine actual delta QPs.  Specifies the max/min allowed delta
+     *  QPs. */
+    char                max_delta_qp;
+    char                min_delta_qp;
+
+   /** \brief Pointer to a VAEncRoi array with num_roi elements.  It is relative to frame
+     *  coordinates for the frame case and to field coordinates for the field case.*/
+    VAEncROI            *roi;
 } VAEncMiscParameterBufferROI;
+
+/*
+ * \brief Dirty region-of-interest (ROI) data structure for encoding.
+ * 
+ * The encoding dirty ROI can be set through VAEncMiscParameterBufferDirtyROI, if the 
+ * implementation supports dirty ROI input. The ROI set through this structure is applicable
+ * only to the current frame or field, so must be sent every frame or field to be applied. 
+ * The number of supported ROIs can be queried through the VAConfigAttribEncDirtyROI.  The
+ * encoder will use the ROI information to know those rectangle areas have changed while the 
+ * areas not covered by dirty ROI rectangles are assumed to have not changed compared to the
+ * previous picture.  The encoder may do some internal optimizations.
+ */
+typedef struct _VAEncMiscParameterBufferDirtyROI
+{
+    /** \brief Number of ROIs being sent.*/
+    unsigned int    num_roi_rectangle;
+
+    /** \brief Pointer to a VARectangle array with num_roi_rectangle elements.*/
+     VARectangle    *roi_rectangle;
+} VAEncMiscParameterBufferDirtyROI;
+
+/** \brief Attribute value for VAConfigAttribEncParallelRateControl */
+typedef struct _VAEncMiscParameterParallelRateControl {
+    /** brief Number of B frames per layer per GOP.
+     *  num_b_in_gop[0] is the number of regular B which refers to only I or P frames.
+     */
+    unsigned int num_b_in_gop[3];
+} VAEncMiscParameterParallelRateControl;
+
 
 /**
  * There will be cases where the bitstream buffer will not have enough room to hold
@@ -1817,7 +1985,44 @@ typedef struct _VAMotionVectorIntel {
     short  mv1[2];  /* future reference */
 } VAMotionVectorIntel;
 
-#include <va/va_dec_jpeg.h>
+/**********************************
+ * JPEG common  data structures
+ **********************************/
+/**
+ * \brief Huffman table for JPEG decoding.
+ *
+ * This structure holds the complete Huffman tables. This is an
+ * aggregation of all Huffman table (DHT) segments maintained by the
+ * application. i.e. up to 2 Huffman tables are stored in there for
+ * baseline profile.
+ *
+ * The #load_huffman_table array can be used as a hint to notify the
+ * VA driver implementation about which table(s) actually changed
+ * since the last submission of this buffer.
+ */
+typedef struct _VAHuffmanTableBufferJPEGBaseline {
+    /** \brief Specifies which #huffman_table is valid. */
+    unsigned char       load_huffman_table[2];
+    /** \brief Huffman tables indexed by table identifier (Th). */
+    struct {
+        /** @name DC table (up to 12 categories) */
+        /**@{*/
+        /** \brief Number of Huffman codes of length i + 1 (Li). */
+        unsigned char   num_dc_codes[16];
+        /** \brief Value associated with each Huffman code (Vij). */
+        unsigned char   dc_values[12];
+        /**@}*/
+        /** @name AC table (2 special codes + up to 16 * 10 codes) */
+        /**@{*/
+        /** \brief Number of Huffman codes of length i + 1 (Li). */
+        unsigned char   num_ac_codes[16];
+        /** \brief Value associated with each Huffman code (Vij). */
+        unsigned char   ac_values[162];
+        /** \brief Padding to 4-byte boundaries. Must be set to zero. */
+        unsigned char   pad[2];
+        /**@}*/
+    }                   huffman_table[2];
+} VAHuffmanTableBufferJPEGBaseline;
 
 /****************************
  * MPEG-2 data structures
@@ -1860,13 +2065,21 @@ typedef struct _VAPictureParameterBufferMPEG2
 /** MPEG-2 Inverse Quantization Matrix Buffer */
 typedef struct _VAIQMatrixBufferMPEG2
 {
+    /** \brief Same as the MPEG-2 bitstream syntax element. */
     int load_intra_quantiser_matrix;
+    /** \brief Same as the MPEG-2 bitstream syntax element. */
     int load_non_intra_quantiser_matrix;
+    /** \brief Same as the MPEG-2 bitstream syntax element. */
     int load_chroma_intra_quantiser_matrix;
+    /** \brief Same as the MPEG-2 bitstream syntax element. */
     int load_chroma_non_intra_quantiser_matrix;
+    /** \brief Luminance intra matrix, in zig-zag scan order. */
     unsigned char intra_quantiser_matrix[64];
+    /** \brief Luminance non-intra matrix, in zig-zag scan order. */
     unsigned char non_intra_quantiser_matrix[64];
+    /** \brief Chroma intra matrix, in zig-zag scan order. */
     unsigned char chroma_intra_quantiser_matrix[64];
+    /** \brief Chroma non-intra matrix, in zig-zag scan order. */
     unsigned char chroma_non_intra_quantiser_matrix[64];
 } VAIQMatrixBufferMPEG2;
 
@@ -1998,9 +2211,13 @@ typedef struct _VAPictureParameterBufferMPEG4
 /** MPEG-4 Inverse Quantization Matrix Buffer */
 typedef struct _VAIQMatrixBufferMPEG4
 {
+    /** Same as the MPEG-4:2 bitstream syntax element. */
     int load_intra_quant_mat;
+    /** Same as the MPEG-4:2 bitstream syntax element. */
     int load_non_intra_quant_mat;
+    /** The matrix for intra blocks, in zig-zag scan order. */
     unsigned char intra_quant_mat[64];
+    /** The matrix for non-intra blocks, in zig-zag scan order. */
     unsigned char non_intra_quant_mat[64];
 } VAIQMatrixBufferMPEG4;
 
@@ -2309,7 +2526,9 @@ typedef struct _VAPictureParameterBufferH264
 /** H.264 Inverse Quantization Matrix Buffer */
 typedef struct _VAIQMatrixBufferH264
 {
+    /** \brief 4x4 scaling list, in raster scan order. */
     unsigned char ScalingList4x4[6][16];
+    /** \brief 8x8 scaling list, in raster scan order. */
     unsigned char ScalingList8x8[2][64];
 } VAIQMatrixBufferH264;
 
@@ -2532,6 +2751,17 @@ VAStatus vaBufferSetNumElements (
  */
 #define VA_CODED_BUF_STATUS_FRAME_SIZE_OVERFLOW         0x1000
 #define VA_CODED_BUF_STATUS_AIR_MB_OVER_THRESHOLD	0xff0000
+
+
+/**
+ * \brief Codec specific information will be sent out. 
+ *
+ * This flag indicates that the coded buffer segment
+ * VACodedBufferSegment.buf points to a predefined data structure
+ * associated with each codec. And encoder may use this
+ * data structure to convey information back to application.
+ */
+#define VA_CODED_BUF_STATUS_CODEC_SPECIFIC              0x2000	
 
 /**
  * \brief The coded buffer segment contains a single NAL unit. 
@@ -2873,6 +3103,11 @@ VAStatus vaQuerySurfaceError(
  * 8-bit Y plane, followed by 8-bit 2x1 subsampled V and U planes
  */
 #define VA_FOURCC_YV16          0x36315659
+/**
+ * 10-bit and 16-bit Planar YUV 4:2:0. 
+ */
+#define VA_FOURCC_P010          0x30313050
+#define VA_FOURCC_P016          0x36313050
 
 /* byte order */
 #define VA_LSB_FIRST		1
@@ -3367,6 +3602,82 @@ VAStatus vaSetDisplayAttributes (
     VADisplayAttribute *attr_list,
     int num_attributes
 );
+
+/****************************
+ * HEVC data structures
+ ****************************/
+/** 
+ * \brief Description of picture properties of those in DPB surfaces.
+ *
+ * If only progressive scan is supported, each surface contains one whole 
+ * frame picture.
+ * Otherwise, each surface contains two fields of whole picture.
+ * In this case, two entries of ReferenceFrames[] may share same picture_id
+ * value.
+ */
+typedef struct _VAPictureHEVC
+{
+    /** \brief reconstructed picture buffer surface index 
+     * invalid when taking value VA_INVALID_SURFACE.
+     */
+    VASurfaceID             picture_id;
+    /** \brief picture order count. 
+     * in HEVC, POCs for top and bottom fields of same picture should
+     * take different values.
+     */
+    int32_t                 pic_order_cnt;
+    /* described below */
+    uint32_t                flags;
+} VAPictureHEVC;
+
+/* flags in VAPictureHEVC could be OR of the following */
+#define VA_PICTURE_HEVC_INVALID                 0x00000001
+/** \brief indication of interlace scan picture. 
+ * should take same value for all the pictures in sequence.
+ */ 
+#define VA_PICTURE_HEVC_FIELD_PIC               0x00000002
+/** \brief polarity of the field picture.
+ * top field takes even lines of buffer surface.
+ * bottom field takes odd lines of buffer surface.
+ */
+#define VA_PICTURE_HEVC_BOTTOM_FIELD            0x00000004
+/** \brief Long term reference picture */
+#define VA_PICTURE_HEVC_LONG_TERM_REFERENCE     0x00000008
+/**
+ * VA_PICTURE_HEVC_RPS_ST_CURR_BEFORE, VA_PICTURE_HEVC_RPS_ST_CURR_AFTER
+ * and VA_PICTURE_HEVC_RPS_LT_CURR of any picture in ReferenceFrames[] should 
+ * be exclusive. No more than one of them can be set for any picture.
+ * Sum of NumPocStCurrBefore, NumPocStCurrAfter and NumPocLtCurr
+ * equals NumPocTotalCurr, which should be equal to or smaller than 8.
+ * Application should provide valid values for both short format and long format.
+ * The pictures in DPB with any of these three flags turned on are referred by
+ * the current picture.
+ */
+/** \brief RefPicSetStCurrBefore of HEVC spec variable 
+ * Number of ReferenceFrames[] entries with this bit set equals 
+ * NumPocStCurrBefore.
+ */
+#define VA_PICTURE_HEVC_RPS_ST_CURR_BEFORE      0x00000010
+/** \brief RefPicSetStCurrAfter of HEVC spec variable
+ * Number of ReferenceFrames[] entries with this bit set equals 
+ * NumPocStCurrAfter.
+ */
+#define VA_PICTURE_HEVC_RPS_ST_CURR_AFTER       0x00000020
+/** \brief RefPicSetLtCurr of HEVC spec variable
+ * Number of ReferenceFrames[] entries with this bit set equals 
+ * NumPocLtCurr.
+ */
+#define VA_PICTURE_HEVC_RPS_LT_CURR             0x00000040
+
+#include <va/va_dec_hevc.h>
+#include <va/va_dec_jpeg.h>
+#include <va/va_dec_vp8.h>
+#include <va/va_dec_vp9.h>
+#include <va/va_enc_h264.h>
+#include <va/va_enc_jpeg.h>
+#include <va/va_enc_mpeg2.h>
+#include <va/va_enc_vp8.h>
+#include <va/va_vpp.h>
 
 /**@}*/
 
